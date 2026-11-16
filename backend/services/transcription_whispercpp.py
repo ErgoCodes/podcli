@@ -221,7 +221,10 @@ def transcribe_file(
         cmd += ["-l", language or "auto"]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=7200)
 
-        with open(out_base + ".json", encoding="utf-8") as f:
+        # whisper.cpp dumps raw token bytes, so scripts that split a character
+        # across tokens (Japanese, for one) leave invalid UTF-8 in the JSON.
+        # Decode tolerantly instead of failing the whole transcription.
+        with open(out_base + ".json", encoding="utf-8", errors="replace") as f:
             data = json.load(f)
 
         transcription = data.get("transcription", [])
