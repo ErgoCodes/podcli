@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import { z } from "zod";
 import { paths } from "../config/paths.js";
-import { AssetManager, inferType } from "./asset-manager.js";
+import { AssetManager, inferType, isRegistrableAssetPath } from "./asset-manager.js";
 import * as cloud from "./podcli-cloud.js";
 import type { AssetType } from "../models/index.js";
 
@@ -65,7 +65,7 @@ export async function push(client: AssetCloud = cloud): Promise<SyncReport> {
   }
 
   for (const asset of registry.assets) {
-    if (!existsSync(asset.path)) {
+    if (!existsSync(asset.path) || !isRegistrableAssetPath(asset.path)) {
       report.skipped.push(asset.name);
       continue;
     }

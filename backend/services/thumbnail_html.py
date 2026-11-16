@@ -331,6 +331,36 @@ def _prepare_thumbnail_lines(
     return _split_thumbnail_title(title, max_line_chars=max_line_chars)
 
 
+_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp"}
+_FONT_URL_PREFIX = "https://fonts.googleapis.com/"
+
+
+def _sanitize_cfg(cfg: dict) -> None:
+    """Config values are interpolated straight into a <style> block that headless
+    Chrome opens from file://. Anything able to close that block could inject
+    markup (iframes onto local files, scripts), so such values are refused."""
+    for key, value in cfg.items():
+        if key == "layers" or not isinstance(value, str):
+            continue
+        if "<" in value or ">" in value:
+            raise ValueError(f"thumbnail config {key!r} contains markup characters")
+    font_url = cfg.get("font_import_url") or ""
+    if font_url and (
+        not font_url.startswith(_FONT_URL_PREFIX) or any(c in font_url for c in "'\"()\\\n\r")
+    ):
+        raise ValueError("thumbnail config 'font_import_url' must be a Google Fonts URL")
+
+
+def _is_safe_layer_image(src: str) -> bool:
+    if src.startswith(("http://", "https://")):
+        return True
+    if src.startswith("data:image/"):
+        return True
+    if src.startswith("file://"):
+        return False
+    return os.path.splitext(src)[1].lower() in _IMAGE_EXTS
+
+
 def _layer_html(layers) -> str:
     """
     The parts a show adds itself, drawn over the template.
@@ -399,7 +429,7 @@ def _layer_html(layers) -> str:
 
         elif kind == "image":
             src = str(layer.get("src") or "").strip()
-            if not src:
+            if not src or not _is_safe_layer_image(src):
                 continue
             # A path from this machine needs the scheme; a URL already has one.
             #
@@ -511,6 +541,7 @@ def _build_html(
     cfg = _load_config()
     if config:
         cfg.update(config)
+    _sanitize_cfg(cfg)
 
     w = cfg["width"]
     h = cfg["height"]

@@ -39,7 +39,7 @@ import { createExecutor, terminateProcessTree } from "../services/python-executo
 import { needsDiarizationRetry, TranscriptCache } from "../services/transcript-cache.js";
 import { resolveTranscribeEngine, engineCanDiarize } from "../services/engine-resolve.js";
 import { FileManager } from "../services/file-manager.js";
-import { AssetManager, assetTypeSchema, inferType, safeName } from "../services/asset-manager.js";
+import { AssetManager, assetTypeSchema, inferType, isRegistrableAssetPath, safeName } from "../services/asset-manager.js";
 import { ClipsHistory, reframeStateSchema } from "../services/clips-history.js";
 import { KnowledgeBase } from "../services/knowledge-base.js";
 import { paths, pythonEnv } from "../config/paths.js";
@@ -3100,7 +3100,7 @@ app.get("/api/assets/:name/download", async (req, res) => {
     // param as a filesystem path (that would allow arbitrary file reads).
     const asset = (await assetManager.list()).find((a) => a.name === req.params.name);
 
-    if (!asset || !existsSync(asset.path)) {
+    if (!asset || !existsSync(asset.path) || !isRegistrableAssetPath(asset.path)) {
       res.status(404).json({ error: `Asset "${req.params.name}" not found` });
 
       return;
@@ -4075,7 +4075,7 @@ app.get("/api/analytics", async (_req, res) => {
 app.get("/api/clips/:id/source", async (req, res) => {
   const clip = await clipsHistory.findById(req.params.id);
 
-  if (!clip || !existsSync(clip.source_video)) {
+  if (!clip || !existsSync(clip.source_video) || !VIDEO_SOURCE_EXTS.has(extname(clip.source_video).toLowerCase())) {
     res.status(404).json({ error: "source not found" });
 
     return;

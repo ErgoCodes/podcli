@@ -9,10 +9,22 @@ import { paths, pythonEnv } from "../config/paths.js";
 import { ASSETS_SCHEMA_VERSION } from "../models/index.js";
 import type { Asset, AssetType, AssetRegistry } from "../models/index.js";
 import { buildYtDlpArgs } from "../utils/ytdlp-args.js";
+import { assertPublicUrl, safeFetch } from "../utils/safe-fetch.js";
 
 const VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm", ".m4v"]);
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"]);
 const AUDIO_EXTS = new Set([".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"]);
+
+const FONT_EXTS = new Set([".ttf", ".otf", ".woff", ".woff2"]);
+const REGISTRABLE_EXTS = new Set([...VIDEO_EXTS, ...IMAGE_EXTS, ...AUDIO_EXTS, ...FONT_EXTS, ".cube"]);
+
+/**
+ * Registered assets are served back over HTTP, exported and synced to the cloud,
+ * so only media/font/LUT files may be registered, never arbitrary host files.
+ */
+export function isRegistrableAssetPath(filePath: string): boolean {
+  return REGISTRABLE_EXTS.has(extname(filePath).toLowerCase());
+}
 
 export const assetTypeSchema = z.enum(["logo", "outro", "intro", "music", "video", "image", "audio", "other"]);
 
@@ -104,6 +116,10 @@ export class AssetManager {
   async register(rawName: string, filePath: string, type: AssetType): Promise<Asset> {
     if (!existsSync(filePath)) {
       throw new Error(`File not found: ${filePath}`);
+    }
+
+    if (!isRegistrableAssetPath(filePath)) {
+      throw new Error(`Unsupported asset file type: ${extname(filePath) || "(none)"}`);
     }
 
     const name = safeName(rawName);
@@ -221,7 +237,7 @@ export class AssetManager {
   }
 
   async importUrl(url: string, name: string, type?: AssetType): Promise<Asset> {
-    assertSafeUrl(url);
+    await assertPublicUrl(url);
     await this.ensureDir();
 
     const destPath = looksLikeDirectFile(url)
@@ -293,43 +309,12 @@ function looksLikeDirectFile(url: string): boolean {
 
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
-/** Basic SSRF guard: only http(s), and reject obvious localhost/private hosts. */
-function assertSafeUrl(url: string): void {
-  let parsed: URL;
-
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error(`Invalid URL: ${url}`);
-  }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error(`Unsupported URL protocol: ${parsed.protocol}`);
-  }
-
-  const host = parsed.hostname.toLowerCase();
-
-  if (
-    host === "localhost" ||
-    host === "0.0.0.0" ||
-    host === "::1" ||
-    host.endsWith(".localhost") ||
-    host.startsWith('127.') ||
-    host.startsWith('10.') ||
-    host.startsWith('192.168.') ||
-    host.startsWith('169.254.') ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-  ) {
-    throw new Error(`Refusing to download from a private/loopback host: ${host}`);
-  }
-}
-
 async function downloadDirect(url: string, destPath: string): Promise<string> {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), DOWNLOAD_TIMEOUT_MS);
 
   try {
-    const res = await fetch(url, { redirect: "follow", signal: ac.signal });
+    const res = await safeFetch(url, { signal: ac.signal });
 
     if (!res.ok || !res.body) {
       throw new Error(`Download failed (${res.status}) for ${url}`);

@@ -11,6 +11,7 @@ import {
   normalizeChannelUrl,
 } from "../utils/ytdlp-args.js";
 import { selectBestCaptionTrack, parseVtt, parseJson3, cuesToWords } from "../utils/captions.js";
+import { safeFetch } from "../utils/safe-fetch.js";
 import type { WordTimestamp } from "../models/index.js";
 
 const history = new ClipsHistory();
@@ -54,7 +55,7 @@ async function runYtDlp(args: string[]): Promise<RunResult> {
 }
 
 async function fetchText(url: string): Promise<string> {
-  const res = await fetch(url);
+  const res = await safeFetch(url);
 
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching caption track`);
 

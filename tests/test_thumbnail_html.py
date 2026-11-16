@@ -202,3 +202,30 @@ class GeorgianCasingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ThumbnailConfigInjectionTests(unittest.TestCase):
+    def test_markup_in_config_value_is_rejected(self):
+        from services import thumbnail_html
+
+        evil = "red}</style><iframe src='file:///etc/passwd'></iframe><style>"
+        with self.assertRaises(ValueError):
+            thumbnail_html._build_html("a", "b", config={"bg_color": evil})
+
+    def test_non_google_font_url_is_rejected(self):
+        from services import thumbnail_html
+
+        with self.assertRaises(ValueError):
+            thumbnail_html._build_html("a", "b", config={"font_import_url": "http://127.0.0.1:8080/x.css"})
+
+    def test_file_uri_layer_image_is_skipped(self):
+        from services import thumbnail_html
+
+        html = thumbnail_html._layer_html([
+            {"kind": "image", "src": "file:///etc/passwd"},
+            {"kind": "image", "src": "/home/u/.ssh/id_rsa"},
+            {"kind": "image", "src": "https://example.com/a.png"},
+        ])
+        self.assertNotIn("passwd", html)
+        self.assertNotIn("id_rsa", html)
+        self.assertIn("https://example.com/a.png", html)
