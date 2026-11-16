@@ -78,6 +78,36 @@ class LanguageHandlingTests(unittest.TestCase):
         self.assertEqual(result["language"], "es")
 
 
+class InvalidUtf8JsonTests(unittest.TestCase):
+    """whisper.cpp writes raw token bytes into its JSON. A character split
+    across tokens (Japanese, for one) leaves invalid UTF-8 there, and strict
+    decoding used to abort the whole transcription."""
+
+    def test_invalid_utf8_text_does_not_abort_transcription(self):
+        def run(cmd, **kwargs):
+            of_index = cmd.index("-of")
+            out_base = cmd[of_index + 1]
+            payload = (
+                b'{"transcription":[{"offsets":{"from":0,"to":1000},'
+                b'"text":"\xe9\xa8","tokens":[]}]}'
+            )
+            with open(out_base + ".json", "wb") as f:
+                f.write(payload)
+            return mock.Mock(returncode=0)
+
+        with tempfile.NamedTemporaryFile(suffix=".mp3") as media, \
+             tempfile.NamedTemporaryFile(suffix=".bin") as model, \
+             tempfile.NamedTemporaryFile(suffix=".wav") as wav:
+            with mock.patch(
+                "services.transcription_whispercpp.subprocess.run",
+                mock.Mock(side_effect=run),
+            ):
+                result = transcribe_file(media.name, model.name, wav_path=wav.name)
+
+        self.assertEqual(len(result["segments"]), 1)
+        self.assertEqual(result["segments"][0]["text"], "\ufffd")
+
+
 class DtwPresetTests(unittest.TestCase):
     def test_preset_tracks_the_model_file(self):
         cases = {
