@@ -25,6 +25,24 @@ from typing import Optional, Callable
 from services.engines import is_assemblyai_engine, is_omnilingual_engine, normalize_engine
 
 
+def _ensure_ffmpeg_on_path() -> None:
+    """Make the hermetic ffmpeg reachable for openai-whisper.
+
+    whisper-py decodes audio by shelling out to a bare ``ffmpeg``, but the
+    native install keeps its ffmpeg out of PATH and passes the absolute path as
+    PODCLI_FFMPEG. Without this, whisper-py dies with FileNotFoundError when the
+    host has no system ffmpeg.
+    """
+    ffmpeg = os.environ.get("PODCLI_FFMPEG") or os.environ.get("FFMPEG_PATH") or ""
+    directory = os.path.dirname(ffmpeg)
+    if not directory:
+        return
+    parts = [p for p in os.environ.get("PATH", "").split(os.pathsep) if p]
+    if directory in parts:
+        return
+    os.environ["PATH"] = os.pathsep.join([directory, *parts])
+
+
 def _managed_home() -> str:
     h = os.environ.get("PODCLI_HOME")
     if h:
@@ -837,6 +855,7 @@ def _transcribe_file_inner(
     # ================================================================
     # Step 1: Whisper transcription
     # ================================================================
+    _ensure_ffmpeg_on_path()
     if progress_callback:
         progress_callback(10, f"Transcribing with Whisper ({model_size})...")
 
