@@ -723,8 +723,19 @@ func symlinkTargetInside(linkPath, linkname, root string) bool {
 	if rootedAnywhere(linkname) {
 		return false
 	}
-	resolved := filepath.Clean(filepath.Join(filepath.Dir(linkPath), linkname))
-	return strings.HasPrefix(resolved+string(os.PathSeparator), root)
+	// Resolve links already extracted into the parent directory, otherwise a
+	// chain (a/b -> .., then a/b/c -> ../..) walks out of root while every
+	// individual hop looks lexically fine.
+	parent := filepath.Dir(linkPath)
+	realRoot := strings.TrimRight(root, string(os.PathSeparator))
+	if realParent, err := filepath.EvalSymlinks(parent); err == nil {
+		parent = realParent
+		if r, err := filepath.EvalSymlinks(realRoot); err == nil {
+			realRoot = r
+		}
+	}
+	resolved := filepath.Clean(filepath.Join(parent, linkname))
+	return strings.HasPrefix(resolved+string(os.PathSeparator), realRoot+string(os.PathSeparator))
 }
 
 // rootedAnywhere reports whether p is rooted on any host, not merely this one.

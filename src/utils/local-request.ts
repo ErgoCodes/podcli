@@ -28,10 +28,17 @@ export function isLocalHost(host: string | undefined): boolean {
  */
 export function rejectReason(
   method: string,
-  headers: { host?: string; origin?: string },
+  headers: { host?: string; origin?: string; "sec-fetch-site"?: string; "sec-fetch-mode"?: string },
   allowAnyHost = false,
 ): string | null {
   if (!allowAnyHost && !isLocalHost(headers.host)) return "Forbidden host";
+
+  // Another site can fire a GET (an <img>, a <script>) with no Origin header, and
+  // some GET routes have side effects (the native file dialog). Browsers label
+  // those requests; a plain link navigation to the studio is still allowed.
+  if (headers["sec-fetch-site"] === "cross-site" && headers["sec-fetch-mode"] !== "navigate") {
+    return "Forbidden origin";
+  }
 
   if (SAFE_METHODS.has(method.toUpperCase()) || headers.origin === undefined) return null;
   let originHost: string;

@@ -18,6 +18,12 @@ describe("isLocalHost", () => {
 describe("rejectReason", () => {
   const host = "localhost:3847";
 
+  it("blocks cross-site subresource GETs but allows link navigation", () => {
+    expect(rejectReason("GET", { host, "sec-fetch-site": "cross-site", "sec-fetch-mode": "no-cors" })).toBe("Forbidden origin");
+    expect(rejectReason("GET", { host, "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" })).toBeNull();
+    expect(rejectReason("GET", { host, "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors" })).toBeNull();
+  });
+
   it("blocks a rebound Host", () => {
     expect(rejectReason("GET", { host: "evil.com:3847" })).toBe("Forbidden host");
   });

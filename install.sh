@@ -94,10 +94,10 @@ if curl -fsSL "$base/checksums.txt" -o "$tmp/sums" 2>/dev/null; then
     [ "$got" = "$want" ] || err "checksum mismatch (got $got want $want)"
     echo "  checksum verified"
   else
-    echo "  no checksum entry for $asset - skipped verification" >&2
+    err "no checksum entry for $asset; refusing to install an unverified binary"
   fi
 else
-  echo "  no checksums.txt in release - skipped verification" >&2
+  err "could not fetch checksums.txt; refusing to install an unverified binary"
 fi
 
 cp "$tmp/$asset" "$bin_dir/podcli"

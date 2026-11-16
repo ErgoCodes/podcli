@@ -100,3 +100,25 @@ func TestExtractTarGzRejectsEscapingHardlink(t *testing.T) {
 		t.Fatal("expected extractTarGz to reject escaping hardlink, got nil error")
 	}
 }
+
+// TestSymlinkChainCannotEscape: a/b -> .. is fine on its own, but a later
+// a/b/c -> ../.. resolves through it to outside the root.
+func TestSymlinkChainCannotEscape(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation needs privileges on Windows")
+	}
+	dest := t.TempDir()
+	root := dest + string(os.PathSeparator)
+	if err := os.MkdirAll(filepath.Join(dest, "a"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("..", filepath.Join(dest, "a", "b")); err != nil {
+		t.Fatal(err)
+	}
+	if symlinkTargetInside(filepath.Join(dest, "a", "b", "c"), "../..", root) {
+		t.Fatal("two-hop symlink chain escaping the extraction root must be rejected")
+	}
+	if !symlinkTargetInside(filepath.Join(dest, "a", "ok"), "../a", root) {
+		t.Fatal("a symlink staying inside the root must still be accepted")
+	}
+}
