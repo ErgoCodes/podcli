@@ -32,6 +32,18 @@ MANAGED_DIRS = [
 ]
 
 ASSET_ARCHIVE_DIR = "assets/files"
+# Export packs whatever the registry/presets point at, so only media, font and
+# LUT files may be archived. Anything else (keys, dotfiles) is skipped.
+EXPORTABLE_ASSET_EXTS = {
+    ".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi",
+    ".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif",
+    ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg",
+    ".ttf", ".otf", ".woff", ".woff2", ".cube",
+}
+
+
+def _is_exportable_asset(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() in EXPORTABLE_ASSET_EXTS
 ASSET_PATH_KEYS = {
     "logo_path",
     "outro_path",
@@ -216,7 +228,7 @@ def export_config(bundle_path: str, source_home: str | None = None) -> dict[str,
                 continue
             raw_path = str(item.get("path", ""))
             source = Path(raw_path).expanduser()
-            if not source.exists():
+            if not _is_exportable_asset(source):
                 continue
             archive_name = _archive_name_for(index, str(item.get("name", "asset")), source)
             archive_path = f"{ASSET_ARCHIVE_DIR}/{archive_name}"
@@ -233,7 +245,7 @@ def export_config(bundle_path: str, source_home: str | None = None) -> dict[str,
                 if raw is not None:
                     for candidate in _collect_asset_paths(raw):
                         candidate_path = Path(candidate).expanduser()
-                        if candidate_path.exists():
+                        if _is_exportable_asset(candidate_path):
                             extra_sources.append((candidate, candidate_path))
 
         presets_dir = home / "presets"
@@ -244,7 +256,7 @@ def export_config(bundle_path: str, source_home: str | None = None) -> dict[str,
                     continue
                 for candidate in _collect_asset_paths(raw):
                     candidate_path = Path(candidate).expanduser()
-                    if candidate_path.exists():
+                    if _is_exportable_asset(candidate_path):
                         extra_sources.append((candidate, candidate_path))
 
         for raw_candidate, source in extra_sources:

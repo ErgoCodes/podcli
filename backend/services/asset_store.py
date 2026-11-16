@@ -326,7 +326,9 @@ def _looks_like_direct_file(url: str) -> bool:
 
 def _download_direct(url: str, dest: str):
     req = urllib.request.Request(url, headers={"User-Agent": "podcli"})
-    with urllib.request.urlopen(req, timeout=60) as resp, open(dest, "wb") as out:
+    from utils.safe_url import open_public_url
+
+    with open_public_url(req, timeout=60) as resp, open(dest, "wb") as out:
         shutil.copyfileobj(resp, out)
 
 
