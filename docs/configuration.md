@@ -17,6 +17,7 @@ Copy `.env.example` to `.env`, or export these in your shell. `setup.sh` copies 
 | `HF_TOKEN` | unset | Hugging Face token, required for speaker diarization |
 | `PODCLI_ENV_FILE` | `./.env` | Path to an alternate `.env` |
 | `PODCLI_BACKEND` | resolved | Override the Python backend directory |
+| `PODCLI_DEV` | unset | Set to `1` to let the launcher use a `backend/` found by walking up from the working directory (development checkouts only; never enable it in untrusted directories) |
 | `PODCLI_PYTHON` | resolved | Override the Python interpreter. The launcher exports the resolved path as `PYTHON_PATH` for internal use |
 | `PODCLI_TRANSITION_AUTOFIX_PASSES` | auto | Transition QA/autofix passes. Runs only on reframes that can produce hard cuts. Set a number to force it, `0` disables; the renderer caps it at 2 |
 | `PODCLI_FACE_WORKERS` | auto | Threads used for face detection during reframing. Auto sizes by core count (max 12) and by clip length, so short clips stay serial rather than paying to build detectors they cannot amortize. Set `1` to force serial, the first thing to try when bisecting a framing regression, since it changes speed only, never the result |
