@@ -94,3 +94,31 @@ class EnvSettingsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EnvSettingsInjectionTests(unittest.TestCase):
+    def test_newline_in_value_is_rejected(self):
+        import tempfile
+        from services import env_settings
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["PODCLI_ENV_FILE"] = os.path.join(tmp, ".env")
+            try:
+                for bad in ("chrome\nPYTHONPATH=/tmp/x", "a\rb", "a\x00b"):
+                    with self.assertRaises(ValueError):
+                        env_settings.set_setting("PODCLI_YTDLP_BROWSER", bad)
+                self.assertFalse(os.path.exists(os.environ["PODCLI_ENV_FILE"]))
+            finally:
+                del os.environ["PODCLI_ENV_FILE"]
+
+
+class SafeEnvLoaderTests(unittest.TestCase):
+    def test_denied_keys_are_not_loaded(self):
+        import tempfile
+        from utils.safe_env import parse_env_file
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, ".env")
+            with open(path, "w") as f:
+                f.write("HF_TOKEN=abc\nPYTHONPATH=/tmp/x\nLD_PRELOAD=/tmp/y.so\nNODE_OPTIONS=--require x\n")
+            self.assertEqual(parse_env_file(path), {"HF_TOKEN": "abc"})

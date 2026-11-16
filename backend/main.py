@@ -22,12 +22,9 @@ for _stream in (sys.stdin, sys.stdout, sys.stderr):
         except (ValueError, OSError):
             pass
 
-# Load .env file (for HF_TOKEN, etc.)
-try:
-    from dotenv import load_dotenv
-    load_dotenv(os.environ.get("PODCLI_ENV_FILE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
-except ImportError:
-    pass
+# Load .env file (for HF_TOKEN, etc.), minus interpreter/linker-hijacking keys.
+from utils.safe_env import load_env_file
+load_env_file(os.environ.get("PODCLI_ENV_FILE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
 import threading
 import traceback
 from version import VERSION

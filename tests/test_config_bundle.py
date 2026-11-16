@@ -290,12 +290,13 @@ class ConfigBundleTests(unittest.TestCase):
             self.assertTrue(summary["home_migration"]["imported"])
             self.assertEqual(summary["moved_json"], 1)
             self.assertEqual(summary["presets_migration"]["moved"], 1)
-            self.assertTrue(summary["env_migration"]["copied"])
+            # .env from the working directory is never imported implicitly.
+            self.assertFalse(summary["env_migration"]["copied"])
             self.assertTrue(os.path.exists(os.path.join(empty_global, "presets", "show.json")))
             self.assertTrue(os.path.exists(os.path.join(empty_global, "presets", "ancient.json")))
             self.assertTrue(os.path.exists(os.path.join(empty_global, "knowledge", "01-brand.md")))
             self.assertTrue(os.path.exists(os.path.join(empty_global, "data", "cache", "ep1.json")))
-            self.assertTrue(os.path.exists(os.path.join(empty_global, ".env")))
+            self.assertFalse(os.path.exists(os.path.join(empty_global, ".env")))
         finally:
             self._exit_migration()
 
@@ -311,6 +312,21 @@ class ConfigBundleTests(unittest.TestCase):
             from config_bundle import _safe_extract_zip
             with self.assertRaises(ValueError):
                 _safe_extract_zip(zf, Path(target))
+        os.remove(evil)
+
+    def test_safe_extract_rejects_runtime_overwrite(self):
+        import zipfile
+        from config_bundle import _safe_extract_zip
+
+        evil = os.path.join(os.path.dirname(self.bundle), "evil2.zip")
+        target = os.path.join(self.dst_home, "import-target2")
+        os.makedirs(target, exist_ok=True)
+        for name in ("runtime/backend/main.py", ".env", "bin/podcli", "auth.json"):
+            with zipfile.ZipFile(evil, "w") as zf:
+                zf.writestr(name, "bad")
+            with zipfile.ZipFile(evil, "r") as zf:
+                with self.assertRaises(ValueError):
+                    _safe_extract_zip(zf, Path(target))
         os.remove(evil)
 
     def test_unified_transcript_cache_round_trip(self):

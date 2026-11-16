@@ -65,7 +65,10 @@ func BackendRoot() (string, bool) {
 	if b := os.Getenv("PODCLI_BACKEND"); b != "" && exists(filepath.Join(b, "cli.py")) {
 		return b, true
 	}
-	if dir, err := os.Getwd(); err == nil {
+	// Walking up from the working directory executes whatever backend/cli.py
+	// sits there, so an untrusted checkout would get code execution. Only
+	// honour it for explicit development use.
+	if dir, err := os.Getwd(); err == nil && os.Getenv("PODCLI_DEV") == "1" {
 		for {
 			cand := filepath.Join(dir, "backend")
 			if exists(filepath.Join(cand, "cli.py")) {

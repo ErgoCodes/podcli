@@ -170,6 +170,9 @@ def set_setting(key: str, value: str) -> None:
     value = (value or "").strip()
     if not value:
         raise ValueError("value is empty")
+    # A newline would let one setting smuggle extra KEY=VALUE lines into .env.
+    if any(c in value for c in ("\n", "\r", "\x00")):
+        raise ValueError("value must be a single line")
     if key in ("PODCLI_CLAUDE_PATH", "PODCLI_CODEX_PATH"):
         from services.ai_cli import _resolve_cli_path
         resolved = _resolve_cli_path(value) or (value if os.path.isfile(value) else None)

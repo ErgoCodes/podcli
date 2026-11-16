@@ -37,20 +37,9 @@ for _stream in (sys.stdin, sys.stdout, sys.stderr):
             pass
 
 _env_file = os.environ.get("PODCLI_ENV_FILE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env")
-try:
-    from dotenv import load_dotenv
-    load_dotenv(_env_file)
-except ImportError:
-    pass
-if os.path.exists(_env_file):
-    with open(_env_file, encoding="utf-8") as _f:
-        for _line in _f:
-            _line = _line.strip()
-            if _line and not _line.startswith("#") and "=" in _line:
-                _key, _val = _line.split("=", 1)
-                _key, _val = _key.strip(), _val.strip()
-                if _key and _val:
-                    os.environ.setdefault(_key, _val)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from utils.safe_env import load_env_file
+load_env_file(_env_file)
 
 os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
 if sys.platform == "darwin":

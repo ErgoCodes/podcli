@@ -129,7 +129,7 @@ def _asset_alias_keys(raw: str, source: Path) -> list[str]:
     return keys
 
 
-def _legacy_migration_pending() -> bool:
+def _legacy_migration_pending(include_env: bool = True) -> bool:
     # Never treat the global managed dir itself as a legacy project to import.
     if _legacy_project_dir().resolve() == _global_home().resolve():
         return False
@@ -137,7 +137,7 @@ def _legacy_migration_pending() -> bool:
         _legacy_home_pending()
         or _legacy_cache_has_content()
         or _legacy_presets_has_content()
-        or _legacy_env_pending()
+        or (include_env and _legacy_env_pending())
     )
 
 
@@ -270,10 +270,24 @@ def export_config(bundle_path: str, source_home: str | None = None) -> dict[str,
 _ZIP_SYMLINK_TYPE = 0xA
 
 
+def _is_allowed_bundle_member(name: str) -> bool:
+    """Only config data may be extracted. The import target is the managed home,
+    which also holds runtime code and .env, so anything else is refused."""
+    norm = name.replace("\\", "/")
+    if norm in ("manifest.json", "assets/", "assets/registry.json", ASSET_ARCHIVE_DIR + "/"):
+        return True
+    if norm in MANAGED_FILES:
+        return True
+    prefixes = [d + "/" for d in MANAGED_DIRS] + [ASSET_ARCHIVE_DIR + "/"]
+    return any(norm.startswith(p) for p in prefixes)
+
+
 def _safe_extract_zip(zf: zipfile.ZipFile, target: Path) -> None:
     root = target.resolve()
     for info in zf.infolist():
         name = info.filename
+        if not _is_allowed_bundle_member(name):
+            raise ValueError(f"Unexpected entry in bundle: {name}")
         if name.startswith("/") or name.startswith("\\"):
             raise ValueError(f"Unsafe absolute path in bundle: {name}")
         # Reject symlink entries: extraction would follow them outside `root`.
@@ -436,18 +450,23 @@ def migrate_legacy_env(*, dry_run: bool = False) -> dict[str, Any]:
 
 
 def auto_migrate_legacy_if_pending(*, quiet: bool = True) -> dict[str, Any] | None:
-    if not _legacy_migration_pending():
+    # Never import <cwd>/.env implicitly: an untrusted project could plant
+    # PODCLI_*_PATH / PYTHONPATH there. Env migration requires an explicit
+    # `podcli config migrate`.
+    if not _legacy_migration_pending(include_env=False):
         return None
-    return ensure_legacy_migrated(quiet=quiet)
+    return ensure_legacy_migrated(quiet=quiet, include_env=False)
 
 
-def ensure_legacy_migrated(*, quiet: bool = True) -> dict[str, Any]:
+def ensure_legacy_migrated(*, quiet: bool = True, include_env: bool = True) -> dict[str, Any]:
     marker = _migration_marker_path()
     had_marker = marker.exists()
     home_summary = migrate_legacy_home(dry_run=False)
     summary = migrate_legacy_cache(dry_run=False)
     presets_summary = migrate_legacy_presets(dry_run=False)
-    env_summary = migrate_legacy_env(dry_run=False)
+    env_summary = (
+        migrate_legacy_env(dry_run=False) if include_env else {"copied": False, "skipped": True}
+    )
     summary["home_migration"] = home_summary
     summary["presets_migration"] = presets_summary
     summary["env_migration"] = env_summary
@@ -482,7 +501,7 @@ def ensure_legacy_migrated(*, quiet: bool = True) -> dict[str, Any]:
             + "\n",
             encoding="utf-8",
         )
-    summary["already_migrated"] = had_marker and not changed and not _legacy_migration_pending()
+    summary["already_migrated"] = had_marker and not changed and not _legacy_migration_pending(include_env=include_env)
     summary["marker"] = str(marker) if marker.exists() else None
     return summary
 
@@ -609,7 +628,12 @@ def import_config(bundle_path: str, target_home: str | None = None, activate: bo
                 archive_path = str(item.get("path", ""))
                 if not archive_path:
                     continue
-                rewritten.append({**item, "path": str((target / archive_path).resolve())})
+                resolved_asset = (target / archive_path).resolve()
+                assets_root = (target / "assets").resolve()
+                # An absolute or ../ path would otherwise register any host file.
+                if os.path.commonpath([str(assets_root), str(resolved_asset)]) != str(assets_root):
+                    raise ValueError(f"Unsafe asset path in bundle: {archive_path}")
+                rewritten.append({**item, "path": str(resolved_asset)})
             _write_json(registry_path, {"assets": rewritten})
 
         _rewrite_asset_paths(target, manifest.get("path_map", {}) if isinstance(manifest, dict) else {})
